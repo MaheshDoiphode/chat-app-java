@@ -1,0 +1,1353 @@
+package in.tusharprabhu.chatapp;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+@SpringBootApplication
+public class ChatAppApplication {
+
+	public static void main(String[] args) {
+		SpringApplication.run(ChatAppApplication.class, args);
+	}
+
+}
+package in.tusharprabhu.chatapp.config;
+
+import org.springframework.context.annotation.Configuration;
+import org.springframework.messaging.simp.config.MessageBrokerRegistry;
+import org.springframework.web.socket.config.annotation.*;
+
+/**
+ * Configuration class for WebSocket messaging in the application.
+ */
+@Configuration
+@EnableWebSocketMessageBroker
+public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
+
+    /**
+     * Registers the Stomp endpoints for WebSocket communication.
+     * param registry the StompEndpointRegistry to register the endpoints
+     */
+    @Override
+    public void registerStompEndpoints(StompEndpointRegistry registry) {
+        registry.addEndpoint("/websocket").withSockJS();
+    }
+
+    /**
+     * Configures the message broker for WebSocket communication.
+     * param registry the MessageBrokerRegistry to configure the message broker
+     */
+    @Override
+    public void configureMessageBroker(MessageBrokerRegistry registry) {
+        registry.enableSimpleBroker("/topic");
+        registry.setApplicationDestinationPrefixes("/app");
+    }
+}
+package in.tusharprabhu.chatapp.config;
+
+import in.tusharprabhu.chatapp.model.ChatMessage;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.event.EventListener;
+import org.springframework.messaging.simp.SimpMessageSendingOperations;
+import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
+import org.springframework.stereotype.Component;
+import org.springframework.web.socket.messaging.SessionDisconnectEvent;
+
+/**
+    * Handles the WebSocket disconnect event.
+    * Sends a leave message to the "/topic/public" destination when a user disconnects.
+    *
+    * param event The SessionDisconnectEvent representing the WebSocket disconnect event.
+    */
+@Component
+@Slf4j
+@RequiredArgsConstructor
+public class WebSocketEventListener {
+
+    private final SimpMessageSendingOperations messagingTemplate;
+
+    @EventListener
+    public void handleWebSocketDisconnectListener(SessionDisconnectEvent event) {
+        StompHeaderAccessor headerAccessor = StompHeaderAccessor.wrap(event.getMessage());
+        String username = (String) headerAccessor.getSessionAttributes().get("username");
+        if (username != null) {
+            System.out.println("user disconnected: {"+ username  + "}");
+            var chatMessage = ChatMessage.builder()
+                    .type(ChatMessage.MessageType.LEAVE)
+                    .sender(username)
+                    .build();
+            messagingTemplate.convertAndSend("/topic/public", chatMessage);
+        }
+    }
+
+}
+package in.tusharprabhu.chatapp.controller;
+
+import in.tusharprabhu.chatapp.model.ChatMessage;
+import org.springframework.messaging.handler.annotation.*;
+import org.springframework.messaging.simp.SimpMessageHeaderAccessor;
+import org.springframework.stereotype.Controller;
+
+/**
+ * Controller class for handling chat-related functionality.
+ */
+@Controller
+public class ChatController {
+
+    /**
+     * Registers a user for chat.
+     * 
+     * param chatMessage The chat message containing the sender's information.
+     * param headerAccessor The SimpMessageHeaderAccessor object used to access session attributes.
+     * return The registered chat message.
+     */
+    @MessageMapping("/chat.register")
+    @SendTo("/topic/public")
+    public ChatMessage register(@Payload ChatMessage chatMessage, SimpMessageHeaderAccessor headerAccessor) {
+        headerAccessor.getSessionAttributes().put("username", chatMessage.getSender());
+        return chatMessage;
+    }
+
+    /**
+     * Sends a chat message to all connected users.
+     * 
+     * param chatMessage The chat message to be sent.
+     * return The sent chat message.
+     */
+    @MessageMapping("/chat.send")
+    @SendTo("/topic/public")
+    public ChatMessage sendMessage(@Payload ChatMessage chatMessage) {
+        return chatMessage;
+    }
+}
+package in.tusharprabhu.chatapp.model;
+
+import lombok.*;
+
+import java.nio.file.FileStore;
+/**
+ * Represents a chat message in the chat application.
+ */
+@Getter
+@Setter
+@AllArgsConstructor
+@NoArgsConstructor
+@Builder
+public class ChatMessage {
+    private String content;
+    private String sender;
+    public MessageType type;
+
+    /**
+     * Enum representing the type of the chat message.
+     */
+    public enum MessageType {
+        CHAT, LEAVE, JOIN
+    }
+
+    /**
+     * Gets the content of the chat message.
+     *
+     * return the content of the chat message
+     */
+    public String getContent() {
+        return content;
+    }
+
+    /**
+     * Sets the content of the chat message.
+     *
+     * param content the content of the chat message
+     */
+    public void setContent(String content) {
+        this.content = content;
+    }
+
+    /**
+     * Gets the sender of the chat message.
+     *
+     * return the sender of the chat message
+     */
+    public String getSender() {
+        return sender;
+    }
+
+    /**
+     * Sets the sender of the chat message.
+     *
+     * param sender the sender of the chat message
+     */
+    public void setSender(String sender) {
+        this.sender = sender;
+    }
+
+    /**
+     * Gets the type of the chat message.
+     *
+     * return the type of the chat message
+     */
+    public MessageType getType() {
+        return type;
+    }
+
+    /**
+     * Sets the type of the chat message.
+     *
+     * param type the type of the chat message
+     */
+    public void setType(MessageType type) {
+        this.type = type;
+    }
+}
+* {
+    -webkit-box-sizing: border-box;
+    -moz-box-sizing: border-box;
+    box-sizing: border-box;
+}
+
+html,body {
+    height: 100%;
+    overflow: hidden;
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    font-weight: 400;
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-size: 1rem;
+    line-height: 1.58;
+    color: #333;
+    /*  background-color: #f4f4f4; */
+    height: 100%;
+
+
+
+    /* Center and scale the image nicely */
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: cover;
+}
+
+body:before {
+    height: 50%;
+    width: 100%;
+    position: absolute;
+    top: 0;
+    left: 0;
+    content: "";
+    z-index: 0;
+}
+
+.clearfix:after {
+    display: block;
+    content: "";
+    clear: both;
+}
+
+.hidden {
+    display: none;
+}
+
+.form-control {
+    width: 100%;
+    min-height: 38px;
+    font-size: 15px;
+    border: 1px solid #c8c8c8;
+}
+
+.form-group {
+    margin-bottom: 15px;
+}
+
+input {
+    padding-left: 10px;
+    outline: none;
+}
+
+h1, h2, h3, h4, h5, h6 {
+    margin-top: 20px;
+    margin-bottom: 20px;
+}
+
+h1 {
+    font-size: 1.7em;
+}
+
+a {
+    color: #128ff2;
+}
+
+button {
+    border:none;
+    background:transparent;
+    color:white;
+    outline: none;
+    vertical-align: middle;
+    padding: 0.6rem 1rem;
+    border-radius: 5px;
+    transition: all 0.2s ease-in-out;
+    cursor: pointer;
+}
+button.default {
+    background-color: transparent;
+    color: #ffffff;
+    box-shadow: 0 2px 2px 0 rgba(0, 0, 0, 0.12);
+}
+
+button.primary {
+    background-color: transparent;
+    box-shadow: 0 2px 2px 0 rgba(0, 0, 0, 0.12);
+    color: #fff;
+}
+
+button.accent {
+    background-color: transparent;
+    box-shadow: 0 2px 2px 0 rgba(0, 0, 0, 0.12);
+    color: #fff;
+}
+
+#username-page {
+    text-align: center;
+}
+
+.username-page-container {
+    background: #fff;
+    box-shadow: 0 1px 11px rgba(0, 0, 0, 0.27);
+    border-radius: 2px;
+    width: 100%;
+    max-width: 500px;
+    display: inline-block;
+    margin-top: 42px;
+    vertical-align: middle;
+    position: relative;
+    padding: 35px 55px 35px;
+    min-height: 250px;
+    position: absolute;
+    top: 50%;
+    left: 0;
+    right: 0;
+    margin: 0 auto;
+    margin-top: -160px;
+}
+
+.username-page-container .username-submit {
+    margin-top: 10px;
+}
+
+
+#chat-page {
+    position: relative;
+    height: 100%;
+}
+
+.chat-container {
+    max-width: 900px;
+    margin-left: auto;
+    margin-right: auto;
+    box-shadow: 0 1px 11px rgba(0, 0, 0, 0.27);
+    border-radius:5px;
+    margin-top: 30px;
+    height: calc(100% - 60px);
+    max-height: 600px;
+    position: relative;
+}
+
+#chat-page ul {
+    list-style-type: none;
+    margin: 0;
+    overflow: auto;
+    overflow-y: scroll;
+    padding: 0 20px 0px 20px;
+    height: calc(100% - 150px);
+}
+
+#chat-page #messageForm {
+    padding: 20px;
+}
+
+#chat-page ul li {
+    line-height: 1.5rem;
+    padding: 10px 20px;
+    margin: 0;
+    /*border-bottom: 1px solid #f4f4f4;*/
+}
+
+#chat-page ul li p {
+    margin: 0;
+}
+
+#chat-page .event-message {
+    width: 100%;
+    text-align: center;
+    clear: both;
+}
+
+#chat-page .event-message p {
+    color: #faf5f5;
+    font-size: 14px;
+    word-wrap: break-word;
+}
+
+#chat-page .chat-message {
+    padding-left: 68px;
+    position: relative;
+
+}
+
+#chat-page .chat-message i {
+    position: absolute;
+    width: 42px;
+    height: 42px;
+    overflow: hidden;
+    left: 10px;
+    display: inline-block;
+    vertical-align: middle;
+    font-size: 18px;
+    line-height: 42px;
+    color: #fff;
+    text-align: center;
+    border-radius: 50%;
+    font-style: normal;
+    text-transform: uppercase;
+}
+
+#chat-page .chat-message span {
+    color: #ffffff;
+    font-weight: 600;
+}
+
+#chat-page .chat-message p {
+    /*color: #43464b;*/
+    color:#ffffff;
+}
+
+#messageForm .input-group input {
+    float: left;
+    width: calc(100% - 85px);
+}
+
+#messageForm .input-group button {
+    float: left;
+    width: 80px;
+    height: 38px;
+    margin-left: 5px;
+}
+
+.chat-header {
+    text-align: center;
+    padding: 15px;
+    border-bottom: 1px solid #ffffff;
+}
+
+.chat-header h2 {
+    margin: 0;
+    font-weight: 500;
+    color:#ffffff;
+}
+
+.connecting {
+    padding-top: 5px;
+    text-align: center;
+    color: #777;
+    position: absolute;
+    top: 65px;
+    width: 100%;
+}
+/* update */
+li span {
+    padding:5px 0;
+    border-radius: 5px;
+    drop-shadow:5px;
+}
+
+.own-message {
+    text-align: right;
+}
+
+.own-message i {
+    visibility:hidden !important;
+}
+
+
+/* update end  */
+@media screen and (max-width: 730px) {
+
+    .chat-container {
+        margin-left: 10px;
+        margin-right: 10px;
+        margin-top: 10px;
+    }
+}
+
+@media screen and (max-width: 480px) {
+    .chat-container {
+        height: calc(100% - 30px);
+    }
+
+    .username-page-container {
+        width: auto;
+        margin-left: 15px;
+        margin-right: 15px;
+        padding: 25px;
+    }
+
+    #chat-page ul {
+        height: calc(100% - 120px);
+    }
+
+    #messageForm .input-group button {
+        width: 65px;
+    }
+
+    #messageForm .input-group input {
+        width: calc(100% - 70px);
+    }
+
+    .chat-header {
+        padding: 10px;
+    }
+
+    .connecting {
+        top: 60px;
+    }
+
+    .chat-header h2 {
+        font-size: 1.1em;
+    }
+}"use strict";
+
+var usernamePage = document.querySelector("#username-page");
+var chatPage = document.querySelector("#chat-page");
+var usernameForm = document.querySelector("#usernameForm");
+var messageForm = document.querySelector("#messageForm");
+var messageInput = document.querySelector("#message");
+var messageArea = document.querySelector("#messageArea");
+var connectingElement = document.querySelector(".connecting");
+
+var stompClient = null;
+var username = null;
+//mycode
+var password = null;
+
+var colors = [
+  "#2196F3",
+  "#32c787",
+  "#00BCD4",
+  "#ff5652",
+  "#ffc107",
+  "#ff85af",
+  "#FF9800",
+  "#39bbb0",
+  "#fcba03",
+  "#fc0303",
+  "#de5454",
+  "#b9de54",
+  "#54ded7",
+  "#54ded7",
+  "#1358d6",
+  "#d611c6",
+];
+
+function connect(event) {
+  username = document.querySelector("#name").value.trim();
+  password = document.querySelector("#password").value;
+  if (username) {
+    //Enter your password
+    if (password == "hello") {
+      usernamePage.classList.add("hidden");
+      chatPage.classList.remove("hidden");
+
+      var socket = new SockJS("/websocket");
+      stompClient = Stomp.over(socket);
+
+      stompClient.connect({}, onConnected, onError);
+    } else {
+      let mes = document.getElementById("mes");
+      mes.innerText = "Wrong password";
+    }
+  }
+  event.preventDefault();
+}
+
+function onConnected() {
+  // Subscribe to the Public Topic
+  stompClient.subscribe("/topic/public", onMessageReceived);
+
+  // Tell your username to the server
+  stompClient.send(
+    "/app/chat.register",
+    {},
+    JSON.stringify({ sender: username, type: "JOIN" })
+  );
+
+  connectingElement.classList.add("hidden");
+}
+
+function onError(error) {
+  connectingElement.textContent =
+    "Could not connect to WebSocket! Please refresh the page and try again or contact your administrator.";
+  connectingElement.style.color = "red";
+}
+
+function send(event) {
+  var messageContent = messageInput.value.trim();
+
+  if (messageContent && stompClient) {
+    var chatMessage = {
+      sender: username,
+      content: messageInput.value,
+      type: "CHAT",
+    };
+
+    stompClient.send("/app/chat.send", {}, JSON.stringify(chatMessage));
+    messageInput.value = "";
+  }
+  event.preventDefault();
+}
+
+/**
+ * Handles the received message and updates the chat interface accordingly.
+ * param {Object} payload - The payload containing the message data.
+ */
+function onMessageReceived(payload) {
+  var message = JSON.parse(payload.body);
+
+  var messageElement = document.createElement("li");
+
+  if (message.type === "JOIN") {
+    messageElement.classList.add("event-message");
+    message.content = message.sender + " joined!";
+  } else if (message.type === "LEAVE") {
+    messageElement.classList.add("event-message");
+    message.content = message.sender + " left!";
+  } else {
+    messageElement.classList.add("chat-message");
+
+    var avatarElement = document.createElement("i");
+    var avatarText = document.createTextNode(message.sender[0]);
+    avatarElement.appendChild(avatarText);
+    avatarElement.style["background-color"] = getAvatarColor(message.sender);
+
+    messageElement.appendChild(avatarElement);
+
+    var usernameElement = document.createElement("span");
+    var usernameText = document.createTextNode(message.sender);
+    usernameElement.appendChild(usernameText);
+    messageElement.appendChild(usernameElement);
+    // * update
+    usernameElement.style["color"] = getAvatarColor(message.sender);
+    //* update end
+  }
+
+  var textElement = document.createElement("p");
+  var messageText = document.createTextNode(message.content);
+  textElement.appendChild(messageText);
+
+  messageElement.appendChild(textElement);
+  // * update
+  if (message.sender === username) {
+    // Add a class to float the message to the right
+    messageElement.classList.add("own-message");
+  } // * update end
+  messageArea.appendChild(messageElement);
+  messageArea.scrollTop = messageArea.scrollHeight;
+}
+
+function getAvatarColor(messageSender) {
+  var hash = 0;
+  for (var i = 0; i < messageSender.length; i++) {
+    hash = 31 * hash + messageSender.charCodeAt(i);
+  }
+
+  var index = Math.abs(hash % colors.length);
+  return colors[index];
+}
+
+usernameForm.addEventListener("submit", connect, true);
+messageForm.addEventListener("submit", send, true);
+package in.tusharprabhu.chatapp;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+@SpringBootApplication
+public class ChatAppApplication {
+
+	public static void main(String[] args) {
+		SpringApplication.run(ChatAppApplication.class, args);
+	}
+
+}
+package in.tusharprabhu.chatapp.config;
+
+import org.springframework.context.annotation.Configuration;
+import org.springframework.web.servlet.config.annotation.CorsRegistry;
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+
+@Configuration
+public class CORSConfig implements WebMvcConfigurer {
+    @Override
+    public void addCorsMappings(CorsRegistry registry) {
+        registry.addMapping("/**")
+                .allowedMethods("*");
+    }
+}
+
+package in.tusharprabhu.chatapp.config;
+
+import org.springframework.context.annotation.Configuration;
+import org.springframework.messaging.simp.config.MessageBrokerRegistry;
+import org.springframework.web.socket.config.annotation.*;
+
+/**
+ * Configuration class for WebSocket messaging in the application.
+ */
+@Configuration
+@EnableWebSocketMessageBroker
+public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
+
+    /**
+     * Registers the Stomp endpoints for WebSocket communication.
+     * param registry the StompEndpointRegistry to register the endpoints
+     */
+    @Override
+    public void registerStompEndpoints(StompEndpointRegistry registry) {
+        registry.addEndpoint("/websocket").withSockJS();
+    }
+
+    /**
+     * Configures the message broker for WebSocket communication.
+     * param registry the MessageBrokerRegistry to configure the message broker
+     */
+    @Override
+    public void configureMessageBroker(MessageBrokerRegistry registry) {
+        registry.enableSimpleBroker("/topic");
+        registry.setApplicationDestinationPrefixes("/app");
+    }
+}
+package in.tusharprabhu.chatapp.config;
+
+import in.tusharprabhu.chatapp.model.ChatMessage;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.event.EventListener;
+import org.springframework.messaging.simp.SimpMessageSendingOperations;
+import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
+import org.springframework.stereotype.Component;
+import org.springframework.web.socket.messaging.SessionDisconnectEvent;
+
+/**
+    * Handles the WebSocket disconnect event.
+    * Sends a leave message to the "/topic/public" destination when a user disconnects.
+    *
+    * param event The SessionDisconnectEvent representing the WebSocket disconnect event.
+    */
+@Component
+@Slf4j
+@RequiredArgsConstructor
+public class WebSocketEventListener {
+
+    private final SimpMessageSendingOperations messagingTemplate;
+
+    @EventListener
+    public void handleWebSocketDisconnectListener(SessionDisconnectEvent event) {
+        StompHeaderAccessor headerAccessor = StompHeaderAccessor.wrap(event.getMessage());
+        String username = (String) headerAccessor.getSessionAttributes().get("username");
+        if (username != null) {
+            System.out.println("user disconnected: {"+ username  + "}");
+            var chatMessage = ChatMessage.builder()
+                    .type(ChatMessage.MessageType.LEAVE)
+                    .sender(username)
+                    .build();
+            messagingTemplate.convertAndSend("/topic/public", chatMessage);
+        }
+    }
+
+}
+package in.tusharprabhu.chatapp.controller;
+
+import in.tusharprabhu.chatapp.model.ChatMessage;
+import org.springframework.messaging.handler.annotation.*;
+import org.springframework.messaging.simp.SimpMessageHeaderAccessor;
+import org.springframework.stereotype.Controller;
+
+/**
+ * Controller class for handling chat-related functionality.
+ */
+@Controller
+public class ChatController {
+
+    /**
+     * Registers a user for chat.
+     * 
+     * param chatMessage The chat message containing the sender's information.
+     * param headerAccessor The SimpMessageHeaderAccessor object used to access session attributes.
+     * return The registered chat message.
+     */
+    @MessageMapping("/chat.register")
+    @SendTo("/topic/public")
+    public ChatMessage register(@Payload ChatMessage chatMessage, SimpMessageHeaderAccessor headerAccessor) {
+        headerAccessor.getSessionAttributes().put("username", chatMessage.getSender());
+        return chatMessage;
+    }
+
+    /**
+     * Sends a chat message to all connected users.
+     * 
+     * param chatMessage The chat message to be sent.
+     * return The sent chat message.
+     */
+    @MessageMapping("/chat.send")
+    @SendTo("/topic/public")
+    public ChatMessage sendMessage(@Payload ChatMessage chatMessage) {
+        return chatMessage;
+    }
+}
+package in.tusharprabhu.chatapp.model;
+
+import lombok.*;
+
+import java.nio.file.FileStore;
+/**
+ * Represents a chat message in the chat application.
+ */
+@Getter
+@Setter
+@AllArgsConstructor
+@NoArgsConstructor
+@Builder
+public class ChatMessage {
+    private String content;
+    private String sender;
+    public MessageType type;
+
+    /**
+     * Enum representing the type of the chat message.
+     */
+    public enum MessageType {
+        CHAT, LEAVE, JOIN
+    }
+
+    /**
+     * Gets the content of the chat message.
+     *
+     * return the content of the chat message
+     */
+    public String getContent() {
+        return content;
+    }
+
+    /**
+     * Sets the content of the chat message.
+     *
+     * param content the content of the chat message
+     */
+    public void setContent(String content) {
+        this.content = content;
+    }
+
+    /**
+     * Gets the sender of the chat message.
+     *
+     * return the sender of the chat message
+     */
+    public String getSender() {
+        return sender;
+    }
+
+    /**
+     * Sets the sender of the chat message.
+     *
+     * param sender the sender of the chat message
+     */
+    public void setSender(String sender) {
+        this.sender = sender;
+    }
+
+    /**
+     * Gets the type of the chat message.
+     *
+     * return the type of the chat message
+     */
+    public MessageType getType() {
+        return type;
+    }
+
+    /**
+     * Sets the type of the chat message.
+     *
+     * param type the type of the chat message
+     */
+    public void setType(MessageType type) {
+        this.type = type;
+    }
+}
+* {
+    -webkit-box-sizing: border-box;
+    -moz-box-sizing: border-box;
+    box-sizing: border-box;
+}
+
+html,body {
+    height: 100%;
+    overflow: hidden;
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    font-weight: 400;
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-size: 1rem;
+    line-height: 1.58;
+    color: #333;
+    /*  background-color: #f4f4f4; */
+    height: 100%;
+
+
+
+    /* Center and scale the image nicely */
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: cover;
+}
+
+body:before {
+    height: 50%;
+    width: 100%;
+    position: absolute;
+    top: 0;
+    left: 0;
+    content: "";
+    z-index: 0;
+}
+
+.clearfix:after {
+    display: block;
+    content: "";
+    clear: both;
+}
+
+.hidden {
+    display: none;
+}
+
+.form-control {
+    width: 100%;
+    min-height: 38px;
+    font-size: 15px;
+    border: 1px solid #c8c8c8;
+}
+
+.form-group {
+    margin-bottom: 15px;
+}
+
+input {
+    padding-left: 10px;
+    outline: none;
+}
+
+h1, h2, h3, h4, h5, h6 {
+    margin-top: 20px;
+    margin-bottom: 20px;
+}
+
+h1 {
+    font-size: 1.7em;
+}
+
+a {
+    color: #128ff2;
+}
+
+button {
+    border:none;
+    background:transparent;
+    color:white;
+    outline: none;
+    vertical-align: middle;
+    padding: 0.6rem 1rem;
+    border-radius: 5px;
+    transition: all 0.2s ease-in-out;
+    cursor: pointer;
+}
+button.default {
+    background-color: transparent;
+    color: #ffffff;
+    box-shadow: 0 2px 2px 0 rgba(0, 0, 0, 0.12);
+}
+
+button.primary {
+    background-color: transparent;
+    box-shadow: 0 2px 2px 0 rgba(0, 0, 0, 0.12);
+    color: #fff;
+}
+
+button.accent {
+    background-color: transparent;
+    box-shadow: 0 2px 2px 0 rgba(0, 0, 0, 0.12);
+    color: #fff;
+}
+
+#username-page {
+    text-align: center;
+}
+
+.username-page-container {
+    background: #fff;
+    box-shadow: 0 1px 11px rgba(0, 0, 0, 0.27);
+    border-radius: 2px;
+    width: 100%;
+    max-width: 500px;
+    display: inline-block;
+    margin-top: 42px;
+    vertical-align: middle;
+    position: relative;
+    padding: 35px 55px 35px;
+    min-height: 250px;
+    position: absolute;
+    top: 50%;
+    left: 0;
+    right: 0;
+    margin: 0 auto;
+    margin-top: -160px;
+}
+
+.username-page-container .username-submit {
+    margin-top: 10px;
+}
+
+
+#chat-page {
+    position: relative;
+    height: 100%;
+}
+
+.chat-container {
+    max-width: 900px;
+    margin-left: auto;
+    margin-right: auto;
+    box-shadow: 0 1px 11px rgba(0, 0, 0, 0.27);
+    border-radius:5px;
+    margin-top: 30px;
+    height: calc(100% - 60px);
+    max-height: 600px;
+    position: relative;
+}
+
+#chat-page ul {
+    list-style-type: none;
+    margin: 0;
+    overflow: auto;
+    overflow-y: scroll;
+    padding: 0 20px 0px 20px;
+    height: calc(100% - 150px);
+}
+
+#chat-page #messageForm {
+    padding: 20px;
+}
+
+#chat-page ul li {
+    line-height: 1.5rem;
+    padding: 10px 20px;
+    margin: 0;
+    /*border-bottom: 1px solid #f4f4f4;*/
+}
+
+#chat-page ul li p {
+    margin: 0;
+}
+
+#chat-page .event-message {
+    width: 100%;
+    text-align: center;
+    clear: both;
+}
+
+#chat-page .event-message p {
+    color: #faf5f5;
+    font-size: 14px;
+    word-wrap: break-word;
+}
+
+#chat-page .chat-message {
+    padding-left: 68px;
+    position: relative;
+
+}
+
+#chat-page .chat-message i {
+    position: absolute;
+    width: 42px;
+    height: 42px;
+    overflow: hidden;
+    left: 10px;
+    display: inline-block;
+    vertical-align: middle;
+    font-size: 18px;
+    line-height: 42px;
+    color: #fff;
+    text-align: center;
+    border-radius: 50%;
+    font-style: normal;
+    text-transform: uppercase;
+}
+
+#chat-page .chat-message span {
+    color: #ffffff;
+    font-weight: 600;
+}
+
+#chat-page .chat-message p {
+    /*color: #43464b;*/
+    color:#ffffff;
+}
+
+#messageForm .input-group input {
+    float: left;
+    width: calc(100% - 85px);
+}
+
+#messageForm .input-group button {
+    float: left;
+    width: 80px;
+    height: 38px;
+    margin-left: 5px;
+}
+
+.chat-header {
+    text-align: center;
+    padding: 15px;
+    border-bottom: 1px solid #ffffff;
+}
+
+.chat-header h2 {
+    margin: 0;
+    font-weight: 500;
+    color:#ffffff;
+}
+
+.connecting {
+    padding-top: 5px;
+    text-align: center;
+    color: #777;
+    position: absolute;
+    top: 65px;
+    width: 100%;
+}
+/* update */
+li span {
+    padding:5px 0;
+    border-radius: 5px;
+    drop-shadow:5px;
+}
+
+.own-message {
+    text-align: right;
+}
+
+.own-message i {
+    visibility:hidden !important;
+}
+
+
+/* update end  */
+@media screen and (max-width: 730px) {
+
+    .chat-container {
+        margin-left: 10px;
+        margin-right: 10px;
+        margin-top: 10px;
+    }
+}
+
+@media screen and (max-width: 480px) {
+    .chat-container {
+        height: calc(100% - 30px);
+    }
+
+    .username-page-container {
+        width: auto;
+        margin-left: 15px;
+        margin-right: 15px;
+        padding: 25px;
+    }
+
+    #chat-page ul {
+        height: calc(100% - 120px);
+    }
+
+    #messageForm .input-group button {
+        width: 65px;
+    }
+
+    #messageForm .input-group input {
+        width: calc(100% - 70px);
+    }
+
+    .chat-header {
+        padding: 10px;
+    }
+
+    .connecting {
+        top: 60px;
+    }
+
+    .chat-header h2 {
+        font-size: 1.1em;
+    }
+}"use strict";
+
+var usernamePage = document.querySelector("#username-page");
+var chatPage = document.querySelector("#chat-page");
+var usernameForm = document.querySelector("#usernameForm");
+var messageForm = document.querySelector("#messageForm");
+var messageInput = document.querySelector("#message");
+var messageArea = document.querySelector("#messageArea");
+var connectingElement = document.querySelector(".connecting");
+
+var stompClient = null;
+var username = null;
+//mycode
+var password = null;
+
+var colors = [
+  "#2196F3",
+  "#32c787",
+  "#00BCD4",
+  "#ff5652",
+  "#ffc107",
+  "#ff85af",
+  "#FF9800",
+  "#39bbb0",
+  "#fcba03",
+  "#fc0303",
+  "#de5454",
+  "#b9de54",
+  "#54ded7",
+  "#54ded7",
+  "#1358d6",
+  "#d611c6",
+];
+
+function connect(event) {
+  username = document.querySelector("#name").value.trim();
+  password = document.querySelector("#password").value;
+  if (username) {
+    //Enter your password
+    if (password == "hello") {
+      usernamePage.classList.add("hidden");
+      chatPage.classList.remove("hidden");
+
+      var socket = new SockJS("/websocket");
+      stompClient = Stomp.over(socket);
+
+      stompClient.connect({}, onConnected, onError);
+    } else {
+      let mes = document.getElementById("mes");
+      mes.innerText = "Wrong password";
+    }
+  }
+  event.preventDefault();
+}
+
+function onConnected() {
+  // Subscribe to the Public Topic
+  stompClient.subscribe("/topic/public", onMessageReceived);
+
+  // Tell your username to the server
+  stompClient.send(
+    "/app/chat.register",
+    {},
+    JSON.stringify({ sender: username, type: "JOIN" })
+  );
+
+  connectingElement.classList.add("hidden");
+}
+
+function onError(error) {
+  connectingElement.textContent =
+    "Could not connect to WebSocket! Please refresh the page and try again or contact your administrator.";
+  connectingElement.style.color = "red";
+}
+
+function send(event) {
+  var messageContent = messageInput.value.trim();
+
+  if (messageContent && stompClient) {
+    var chatMessage = {
+      sender: username,
+      content: messageInput.value,
+      type: "CHAT",
+    };
+
+    stompClient.send("/app/chat.send", {}, JSON.stringify(chatMessage));
+    messageInput.value = "";
+  }
+  event.preventDefault();
+}
+
+/**
+ * Handles the received message and updates the chat interface accordingly.
+ * param {Object} payload - The payload containing the message data.
+ */
+function onMessageReceived(payload) {
+  var message = JSON.parse(payload.body);
+
+  var messageElement = document.createElement("li");
+
+  if (message.type === "JOIN") {
+    messageElement.classList.add("event-message");
+    message.content = message.sender + " joined!";
+  } else if (message.type === "LEAVE") {
+    messageElement.classList.add("event-message");
+    message.content = message.sender + " left!";
+  } else {
+    messageElement.classList.add("chat-message");
+
+    var avatarElement = document.createElement("i");
+    var avatarText = document.createTextNode(message.sender[0]);
+    avatarElement.appendChild(avatarText);
+    avatarElement.style["background-color"] = getAvatarColor(message.sender);
+
+    messageElement.appendChild(avatarElement);
+
+    var usernameElement = document.createElement("span");
+    var usernameText = document.createTextNode(message.sender);
+    usernameElement.appendChild(usernameText);
+    messageElement.appendChild(usernameElement);
+    // * update
+    usernameElement.style["color"] = getAvatarColor(message.sender);
+    //* update end
+  }
+
+  var textElement = document.createElement("p");
+  var messageText = document.createTextNode(message.content);
+  textElement.appendChild(messageText);
+
+  messageElement.appendChild(textElement);
+  // * update
+  if (message.sender === username) {
+    // Add a class to float the message to the right
+    messageElement.classList.add("own-message");
+  } // * update end
+  messageArea.appendChild(messageElement);
+  messageArea.scrollTop = messageArea.scrollHeight;
+}
+
+function getAvatarColor(messageSender) {
+  var hash = 0;
+  for (var i = 0; i < messageSender.length; i++) {
+    hash = 31 * hash + messageSender.charCodeAt(i);
+  }
+
+  var index = Math.abs(hash % colors.length);
+  return colors[index];
+}
+
+usernameForm.addEventListener("submit", connect, true);
+messageForm.addEventListener("submit", send, true);
